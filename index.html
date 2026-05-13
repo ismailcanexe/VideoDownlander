@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Video İndirici</title>
+    <style>
+        :root {
+            /* Tam Dark Mode Renkleri */
+            --bg-base: #09090b;
+            --bg-panel: #18181b;
+            --bg-input: #27272a;
+            --border-color: #3f3f46;
+            --text-main: #f4f4f5;
+            --text-muted: #a1a1aa;
+            --accent-blue: #3b82f6;
+            --accent-hover: #2563eb;
+            --accent-green: #10b981;
+            --accent-green-hover: #059669;
+            --glow-blue: rgba(59, 130, 246, 0.35);
+            --glow-green: rgba(16, 185, 129, 0.25);
+            --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+            --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes fadeSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes panelShine {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+
+        @keyframes progressGlow {
+            0%, 100% { box-shadow: 0 0 8px var(--glow-green); }
+            50% { box-shadow: 0 0 16px var(--glow-green), 0 0 24px rgba(16, 185, 129, 0.15); }
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.72; }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes thumbReveal {
+            from {
+                opacity: 0;
+                transform: scale(1.04);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-base);
+            background-image:
+                radial-gradient(ellipse 120% 80% at 50% -40%, rgba(59, 130, 246, 0.12), transparent 55%),
+                radial-gradient(ellipse 80% 50% at 100% 100%, rgba(16, 185, 129, 0.06), transparent 45%);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        body.is-fetching .panel:first-child,
+        body.is-downloading .panel {
+            pointer-events: none;
+        }
+
+        /* İptal indirme sırasında tıklanabilir kalsın (panel pointer-events: none iken) */
+        body.is-downloading .btn-cancel {
+            pointer-events: auto;
+            position: relative;
+            z-index: 2;
+        }
+
+        .btn-fetch-info {
+            min-width: 118px;
+        }
+
+        body.is-fetching .btn-fetch-info {
+            position: relative;
+            color: transparent;
+        }
+
+        body.is-fetching .btn-fetch-info::after {
+            content: '';
+            position: absolute;
+            inset: 50% auto auto 50%;
+            width: 18px;
+            height: 18px;
+            margin: -9px 0 0 -9px;
+            border: 2px solid rgba(255, 255, 255, 0.35);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.65s linear infinite;
+        }
+
+        /* Ana Izgara Yapısı (Tiling) */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            flex: 1;
+            animation: fadeSlideUp 0.45s var(--ease-out) both;
+        }
+
+        .panel {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+            transition:
+                transform 0.28s var(--ease-out),
+                border-color 0.28s var(--ease-out),
+                box-shadow 0.28s var(--ease-out);
+        }
+
+        .panel:nth-child(1) { animation: fadeSlideUp 0.5s var(--ease-out) 0.05s both; }
+        .panel:nth-child(2) { animation: fadeSlideUp 0.5s var(--ease-out) 0.12s both; }
+
+        .panel:hover {
+            border-color: #52525b;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+        }
+
+        body:not(.is-fetching):not(.is-downloading) .panel:hover {
+            transform: translateY(-2px);
+        }
+
+        h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .panel-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .panel-top h3 {
+            margin: 0;
+        }
+
+        .lang-picker {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .lang-picker-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        select.lang-select {
+            width: auto;
+            min-width: 128px;
+            max-width: 180px;
+            padding: 6px 10px;
+            font-size: 13px;
+        }
+
+        label {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        textarea, input[type="text"], select {
+            width: 100%;
+            background-color: var(--bg-input);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            padding: 10px 12px;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-family: inherit;
+            outline: none;
+            transition:
+                border-color 0.22s var(--ease-out),
+                box-shadow 0.22s var(--ease-out),
+                transform 0.15s var(--ease-out);
+        }
+
+        textarea:focus, input[type="text"]:focus, select:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px var(--glow-blue);
+        }
+
+        textarea {
+            flex: 1;
+            resize: none;
+            margin-bottom: 15px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .flex-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        button {
+            background-color: var(--accent-blue);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition:
+                background-color 0.2s var(--ease-out),
+                transform 0.18s var(--ease-spring),
+                box-shadow 0.2s var(--ease-out);
+        }
+
+        button:hover:not(:disabled) {
+            background-color: var(--accent-hover);
+            box-shadow: 0 4px 14px var(--glow-blue);
+        }
+
+        button:active:not(:disabled) {
+            transform: scale(0.97);
+        }
+
+        button:focus-visible {
+            outline: 2px solid var(--accent-blue);
+            outline-offset: 2px;
+        }
+
+        button:disabled {
+            background-color: var(--border-color);
+            color: var(--text-muted);
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        .btn-download {
+            background: linear-gradient(135deg, #059669 0%, var(--accent-green) 50%, #34d399 100%);
+            background-size: 200% 200%;
+            width: 100%;
+            padding: 14px;
+            font-size: 15px;
+            margin-top: auto;
+            border-radius: 10px;
+        }
+
+        .btn-download:hover:not(:disabled) {
+            background-color: transparent;
+            background-position: 100% 50%;
+            box-shadow: 0 6px 20px var(--glow-green);
+        }
+
+        body.is-downloading .btn-download {
+            animation: panelShine 2s linear infinite;
+        }
+
+        .download-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: auto;
+            align-items: stretch;
+        }
+
+        .download-actions .btn-download {
+            flex: 1;
+            margin-top: 0;
+        }
+
+        .btn-cancel {
+            min-width: 92px;
+            background: transparent;
+            border: 1px solid #f87171;
+            color: #fecaca;
+        }
+
+        .btn-cancel:hover:not(:disabled) {
+            background: rgba(248, 113, 113, 0.12);
+            box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.25);
+        }
+
+        .prefs-row {
+            margin-bottom: 12px;
+        }
+
+        /* İndirme sırası */
+        .queue-panel {
+            margin-top: 0;
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 14px 18px;
+            animation: fadeSlideUp 0.45s var(--ease-out) both;
+        }
+
+        .queue-panel[hidden] {
+            display: none !important;
+        }
+
+        .queue-panel h4 {
+            margin: 0 0 10px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .url-queue-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            max-height: 140px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .url-queue-item {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.35;
+            padding: 8px 10px;
+            background: var(--bg-input);
+            border-radius: 8px;
+            border: 1px solid transparent;
+            transition: border-color 0.2s var(--ease-out), background 0.2s var(--ease-out);
+        }
+
+        .url-queue-item.is-running {
+            border-color: rgba(59, 130, 246, 0.45);
+            background: rgba(59, 130, 246, 0.08);
+            color: var(--text-main);
+        }
+
+        .url-queue-item.is-done {
+            border-color: rgba(16, 185, 129, 0.35);
+        }
+
+        .url-queue-item.is-error {
+            border-color: rgba(248, 113, 113, 0.4);
+        }
+
+        .url-queue-item.is-skipped,
+        .url-queue-item.is-cancelled {
+            opacity: 0.65;
+        }
+
+        .pill-status {
+            flex-shrink: 0;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: var(--border-color);
+            color: var(--text-main);
+        }
+
+        .pill-status.pending { background: #3f3f46; color: #d4d4d8; }
+        .pill-status.running { background: var(--accent-blue); color: #fff; }
+        .pill-status.done { background: var(--accent-green); color: #022c22; }
+        .pill-status.error { background: #7f1d1d; color: #fecaca; }
+        .pill-status.skipped { background: #52525b; color: #e4e4e7; }
+        .pill-status.cancelled { background: #713f12; color: #fef3c7; }
+
+        .url-queue-item .url-text {
+            word-break: break-all;
+            flex: 1;
+        }
+
+        .url-queue-item .err-hint {
+            display: block;
+            margin-top: 4px;
+            font-size: 11px;
+            color: #fca5a5;
+            flex: 1 0 100%;
+        }
+
+        /* Toast */
+        .toast-host {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 8px;
+            max-width: min(380px, calc(100vw - 40px));
+            pointer-events: none;
+        }
+
+        .toast {
+            pointer-events: auto;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            line-height: 1.45;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+            border: 1px solid var(--border-color);
+            background: var(--bg-panel);
+            color: var(--text-main);
+            animation: toastIn 0.35s var(--ease-spring) both;
+        }
+
+        .toast.info { border-left: 4px solid var(--accent-blue); }
+        .toast.success { border-left: 4px solid var(--accent-green); }
+        .toast.error { border-left: 4px solid #ef4444; }
+
+        @keyframes toastIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px) scale(0.96);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .toast-close {
+            float: right;
+            margin: -4px -4px 0 10px;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .toast-close:hover {
+            color: var(--text-main);
+            background: var(--bg-input);
+        }
+
+        /* Thumbnail Alanı */
+        .thumbnail-wrapper {
+            width: 100%;
+            height: 180px;
+            background-color: var(--bg-input);
+            border: 1px dashed var(--border-color);
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+            transition: border-color 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out);
+        }
+
+        body.is-fetching .thumbnail-wrapper {
+            border-style: solid;
+            border-color: rgba(59, 130, 246, 0.4);
+            box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.15);
+        }
+
+        .thumbnail-title {
+            margin: -8px 0 16px;
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.4;
+            min-height: 18px;
+            transition: color 0.2s var(--ease-out);
+        }
+
+        .thumbnail-title.title-updated {
+            color: var(--text-main);
+            animation: fadeSlideUp 0.35s var(--ease-out) both;
+        }
+
+        .thumbnail-wrapper img:not([hidden]) {
+            display: block;
+        }
+
+        .thumbnail-wrapper img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0;
+            transition: opacity 0.35s var(--ease-out);
+        }
+
+        .thumbnail-wrapper img.thumb-loaded {
+            opacity: 1;
+            animation: thumbReveal 0.45s var(--ease-out) both;
+        }
+
+        .thumbnail-placeholder {
+            color: var(--text-muted);
+            font-size: 13px;
+            transition: opacity 0.25s var(--ease-out);
+        }
+
+        .thumbnail-placeholder.is-hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Checkbox */
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .checkbox-row input {
+            accent-color: var(--accent-blue);
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        /* Progress / durum (kuyruk listesinin üstünde) */
+        .status-panel {
+            margin-top: 20px;
+            margin-bottom: 0;
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 15px 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            transition: border-color 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out);
+            animation: fadeSlideUp 0.55s var(--ease-out) 0.18s both;
+        }
+
+        .status-panel + .queue-panel {
+            margin-top: 12px;
+        }
+
+        body.is-downloading .status-panel,
+        body.is-fetching .status-panel {
+            border-color: rgba(16, 185, 129, 0.35);
+            box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.12), 0 8px 28px rgba(0, 0, 0, 0.35);
+        }
+
+        .progress-track {
+            background-color: var(--bg-input);
+            height: 10px;
+            border-radius: 999px;
+            overflow: hidden;
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        .progress-track::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+            pointer-events: none;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #047857, var(--accent-green), #6ee7b7);
+            background-size: 200% 100%;
+            transition: width 0.35s var(--ease-out);
+            position: relative;
+            z-index: 1;
+        }
+
+        .progress-fill.is-active {
+            animation: progressGlow 1.8s ease-in-out infinite;
+        }
+
+        .progress-fill.is-active::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                90deg,
+                transparent 0%,
+                rgba(255, 255, 255, 0.25) 50%,
+                transparent 100%
+            );
+            background-size: 200% 100%;
+            animation: panelShine 1.2s ease-in-out infinite;
+        }
+
+        .status-text {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-family: 'Consolas', monospace;
+            line-height: 1.45;
+            min-height: 1.45em;
+            transition: color 0.2s var(--ease-out);
+        }
+
+        body.is-downloading .status-text,
+        body.is-fetching .status-text {
+            color: var(--text-main);
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+
+            body.is-fetching .btn-fetch-info {
+                color: inherit;
+            }
+
+            body.is-fetching .btn-fetch-info::after {
+                display: none;
+            }
+
+            .main-grid,
+            .panel:nth-child(1),
+            .panel:nth-child(2),
+            .status-panel {
+                animation: none;
+                opacity: 1;
+                transform: none;
+            }
+
+            body.is-downloading .status-text,
+            body.is-fetching .status-text {
+                animation: none;
+            }
+
+            .toast {
+                animation: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="main-grid">
+        <div class="panel">
+            <div class="panel-top">
+                <h3 data-i18n="ui.section_links">Bağlantılar</h3>
+                <div class="lang-picker">
+                    <label class="lang-picker-label" for="cmbLanguage" data-i18n="ui.language">Dil</label>
+                    <select id="cmbLanguage" class="lang-select" data-i18n-aria="ui.language" aria-label="">
+                        <option value="tr">Türkçe</option>
+                        <option value="en">English</option>
+                        <option value="es">Español</option>
+                        <option value="fr">Français</option>
+                        <option value="it">Italiano</option>
+                        <option value="de">Deutsch</option>
+                        <option value="ja">日本語</option>
+                        <option value="zh">中文</option>
+                        <option value="ru">Русский</option>
+                    </select>
+                </div>
+            </div>
+            <textarea id="txtUrls" data-i18n-placeholder="ui.urls_placeholder" placeholder=""></textarea>
+            
+            <div class="flex-row" style="justify-content: space-between;">
+                <label class="checkbox-row">
+                    <input type="checkbox" id="chkMp3">
+                    <span data-i18n="ui.audio_only_mp3">Sadece Ses (MP3)</span>
+                </label>
+                <button type="button" id="btnFetchInfo" class="btn-fetch-info" data-i18n="ui.fetch_info">Verileri Çek</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3 data-i18n="ui.section_details">Video Detayları</h3>
+            
+            <div class="thumbnail-wrapper">
+                <span class="thumbnail-placeholder" id="thumbPlaceholder" data-i18n="ui.video_waiting">Video bekleniyor...</span>
+                <img id="imgThumbnail" alt="" hidden>
+            </div>
+
+            <div id="lblVideoTitle" class="thumbnail-title"></div>
+
+            <div class="input-group">
+                <label data-i18n="ui.quality">Çözünürlük</label>
+                <select id="cmbQuality"></select>
+            </div>
+
+            <div class="input-group">
+                <label data-i18n="ui.target_folder">Hedef Klasör</label>
+                <div class="flex-row">
+                    <input type="text" id="txtFolder" readonly data-i18n-placeholder="ui.folder_placeholder" placeholder="">
+                    <button type="button" id="btnSelectFolder" data-i18n="ui.browse">Gözat</button>
+                </div>
+            </div>
+
+            <label class="checkbox-row prefs-row">
+                <input type="checkbox" id="chkOpenFolderWhenDone" checked>
+                <span data-i18n="ui.open_folder_when_done">İndirme bitince klasörü aç</span>
+            </label>
+
+            <div class="download-actions">
+                <button type="button" id="btnDownload" class="btn-download" data-i18n="ui.start_download">İNDİRMEYİ BAŞLAT</button>
+                <button type="button" id="btnCancelDownload" class="btn-cancel" hidden data-i18n="ui.cancel">İptal</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-panel">
+        <div class="progress-track">
+            <div id="progressBar" class="progress-fill"></div>
+        </div>
+        <div id="lblStatus" class="status-text"></div>
+    </div>
+
+    <div class="queue-panel" id="queuePanel" hidden>
+        <h4 data-i18n="ui.queue_heading">İndirme sırası</h4>
+        <ul id="urlQueueList" class="url-queue-list" data-i18n-aria="ui.queue_aria" aria-label=""></ul>
+    </div>
+
+    <div id="toastHost" class="toast-host" aria-live="polite"></div>
+
+    <script src="i18n.js"></script>
+    <script src="renderer.js"></script>
+</body>
+</html>

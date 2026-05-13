@@ -1,0 +1,31 @@
+{
+  "name": "video-downloader",
+  "version": "1.0.0",
+  "description": "Video İndirici",
+  "author": "ismail",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder"
+  },
+  "build": {
+    "appId": "com.ismail.videodownloader",
+    "productName": "Video Downloader",
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**/*"
+    ]
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0",
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "yt-dlp-wrap": "^2.3.11"
+  }
+}
