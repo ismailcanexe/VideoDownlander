@@ -119,22 +119,10 @@ const applyVideoInfoToUi = (info) => {
     bumpTitleAnimation();
 };
 
-function isLikelyYouTubeUrl(raw) {
+function isValidUrl(raw) {
     try {
         const u = new URL(raw);
-        const h = u.hostname.replace(/^www\./i, '');
-        if (h === 'youtu.be') {
-            return u.pathname.length > 1;
-        }
-        if (h === 'youtube.com' || h === 'm.youtube.com' || h === 'music.youtube.com' || h === 'www.youtube.com') {
-            return (
-                u.pathname.startsWith('/watch') ||
-                u.pathname.startsWith('/shorts/') ||
-                u.pathname.startsWith('/live/') ||
-                u.pathname.startsWith('/live')
-            );
-        }
-        return false;
+        return u.protocol === 'http:' || u.protocol === 'https:';
     } catch {
         return false;
     }
@@ -146,7 +134,7 @@ function parseUrlLines(text) {
     const valid = [];
     const invalid = [];
     for (const line of nonEmpty) {
-        if (isLikelyYouTubeUrl(line)) {
+        if (isValidUrl(line)) {
             valid.push(line);
         } else {
             invalid.push(line);
